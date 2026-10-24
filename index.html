@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My Pi Dashboard</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,sans-serif;background:#101827;color:#edf2fa}body{max-width:880px;margin:0 auto;padding:48px 24px}h1{font-size:2.5rem;margin-bottom:8px}p{color:#aabbd2}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px;margin-top:32px}article{background:#1c293d;border:1px solid #30415b;border-radius:18px;padding:24px}h2{font-size:1rem;color:#aabbd2;margin-top:0}.value{font-size:2rem;font-weight:700}progress{width:100%;accent-color:#68deb6;margin-top:18px}footer{margin-top:28px;color:#aabbd2}#status{min-height:24px}
+</style>
+</head>
+<body>
+<h1>My Pi Dashboard 🍓</h1>
+<p>A little window into your Raspberry Pi.</p>
+<p id="hostname">Connecting…</p>
+<main class="grid">
+<article><h2>CPU temperature</h2><div class="value" id="temperature">—</div></article>
+<article><h2>Uptime</h2><div class="value" id="uptime">—</div></article>
+<article><h2>Memory used</h2><div class="value" id="memory">—</div><progress id="memory-bar" max="100" value="0" aria-label="Memory usage"></progress></article>
+<article><h2>Disk used</h2><div class="value" id="disk">—</div><progress id="disk-bar" max="100" value="0" aria-label="Disk usage"></progress></article>
+</main>
+<footer><div id="status" role="status">Loading…</div>Refreshes every 3 seconds. No data leaves this dashboard.</footer>
+<script>
+const el = id => document.getElementById(id);
+const gib = bytes => (bytes / 1024 ** 3).toFixed(1) + ' GiB';
+function usage(name, used, total) {
+  el(name).textContent = used == null || !total ? 'Unavailable' : gib(used) + ' / ' + gib(total);
+  el(name + '-bar').value = used == null || !total ? 0 : used / total * 100;
+}
+async function refresh() {
+  try {
+    const response = await fetch('/api/stats', {signal: AbortSignal.timeout(2500)});
+    if (!response.ok) throw new Error('Request failed');
+    const data = await response.json();
+    el('hostname').textContent = data.hostname;
+    el('temperature').textContent = data.temperature_c == null ? 'Unavailable' : data.temperature_c.toFixed(1) + ' °C';
+    const minutes = Math.floor(data.uptime_seconds / 60);
+    el('uptime').textContent = data.uptime_seconds == null ? 'Unavailable' : Math.floor(minutes / 1440) + 'd ' + Math.floor(minutes / 60) % 24 + 'h ' + minutes % 60 + 'm';
+    usage('memory', data.memory_used, data.memory_total);
+    usage('disk', data.disk_used, data.disk_total);
+    el('status').textContent = 'Updated ' + new Date(data.updated_at * 1000).toLocaleTimeString();
+  } catch (error) {
+    el('status').textContent = 'Connection lost. Showing last readings; retrying…';
+  } finally {
+    setTimeout(refresh, 3000);
+  }
+}
+refresh();
+</script>
+</body>
+</html>
